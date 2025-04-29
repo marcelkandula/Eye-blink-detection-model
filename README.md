@@ -1,19 +1,19 @@
-# 👁️ Eye Blink Detection Model
+# 👁 Eye Blink Detection Model
 
 A lightweight and effective eye blink detection system built using PyTorch, OpenCV, and mediapipe. This project detects eye blinks in real-time from video streams.
 
 ---
 
-## 🎥 Demo
+##  Demo
  
-👉 Click the link below to view the demo video:
+Click the link below to view the demo video:
 
 [🎬 **demo.mp4**](demo.mp4)
 
 
 ---
 
-## 🧠 How It Works
+##  How It Works
 
 - Uses mediapipe's facial landmark tool to collect regions of eyes.
 - Predicts with pretrained model whether and eye is open or closed.
@@ -22,7 +22,7 @@ A lightweight and effective eye blink detection system built using PyTorch, Open
 ---
 
 
-### 💻 Installation
+###  Installation
 
 1. Clone this repository:
 
@@ -33,7 +33,7 @@ pip install -r requirements.txt
 python inference.py
 ```
 
-📚 Citation
+Citation
 
 Special thanks to creators of CEW dataset:
 
