@@ -17,7 +17,7 @@ Click the link below to view the demo video:
 
 - Uses mediapipe's facial landmark tool to collect regions of eyes of multiple faces.
 - Predicts with pretrained model whether and eye is open or closed.
-- Shows outputs such as: number of blinks, total time of closed eyes and average time per blink
+- Shows outputs such as: number of blinks per face and saves video with bounding boxes to output.mp4 (only if source == video)
 
 ---
 
