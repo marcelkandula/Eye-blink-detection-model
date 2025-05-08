@@ -1,106 +1,207 @@
-from model import EyeBlinkCNN
-import torch
-import torchvision.transforms as transforms
+import argparse
+import time
+from dataclasses import dataclass, field
+from pathlib import Path
+from model import EyeBlinkCNN  
+
 import cv2
 import mediapipe as mp
-import time
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+import torch
+import torchvision.transforms as transforms
+
+
+def parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(
+        description="Blink detection - from camera or video file"
+    )
+    p.add_argument(
+        "--source",
+        choices=["camera", "video"],
+        default="camera",
+        help="Źródło obrazu (domyślnie kamera 0)",
+    )
+    p.add_argument(
+        "--path",
+        type=str,
+        default="video.mp4",
+        help="Path to file (only if --source video)",
+    )
+    p.add_argument(
+        "--max-faces",
+        type=int,
+        default=5,
+        help="maximum number of faces to detect (default: 5)",
+    )
+    return p.parse_args()
+
+
+# Model 
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 model = EyeBlinkCNN().to(device)
-model.load_state_dict(torch.load('eye_blink_cnn.pth', map_location=device))
+model.load_state_dict(torch.load("eye_blink_detection.pth", map_location=device))
 model.eval()
 
-# transform crooped eye frame into, ready to inference image 
-transform = transforms.Compose([
-    transforms.ToPILImage(),
-    transforms.Grayscale(num_output_channels=1),
-    transforms.Resize((24, 24)),
-    transforms.ToTensor(),
-    transforms.Normalize((0.5,), (0.5,))
-])
+transform = transforms.Compose(
+    [
+        transforms.ToPILImage(),
+        transforms.Grayscale(num_output_channels=1),
+        transforms.Resize((24, 24)),
+        transforms.ToTensor(),
+        transforms.Normalize((0.5,), (0.5,)),
+    ]
+)
 
 
-def predict_eye(eye_img):
-    with torch.no_grad():
-        input_tensor = transform(eye_img).unsqueeze(0).to(device)
-        output = model(input_tensor)
-        _, pred = torch.max(output, 1)
-        return 'open' if pred.item() == 1 else 'closed'
+@torch.no_grad()
+def predict_eye(eye_img) -> str:
+    if eye_img.size == 0:
+        return "open"  
+    tensor = transform(eye_img).unsqueeze(0).to(device)
+    out = model(tensor)
+    _, pred = torch.max(out, 1)
+    return "open" if pred.item() == 1 else "closed"
 
 
-mp_face_mesh = mp.solutions.face_mesh
-face_mesh = mp_face_mesh.FaceMesh(static_image_mode=False, max_num_faces=1, refine_landmarks=True)
-LEFT_EYE_IDXS = [33, 133]
-RIGHT_EYE_IDXS = [362, 263]
+# face data structure
+@dataclass
+class FaceData:
+    blink_counter: int = 0
+    total_closed_time: float = 0.0
+    both_closed: bool = False
+    closed_start: float | None = None
 
-blink_counter = 0
-both_were_closed = False
+    box_color: tuple[int, int, int] = field(
+        default_factory=lambda: (0, 255, 0)
+    )  
 
-closed_start_time = None
-total_closed_time = 0.0 
 
-cap = cv2.VideoCapture(0)
-while cap.isOpened():
-    ret, frame = cap.read()
-    if not ret:
-        break
+# main loop
 
-    h, w = frame.shape[:2]
-    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    result = face_mesh.process(rgb)
+def main() -> None:
+    args = parse_args()
+    # open video source
+    if args.source == "camera":
+        cap = cv2.VideoCapture(0)
+        if not cap.isOpened():
+            raise RuntimeError("cant open camera")
+        out = None
+    else:
+        if not args.path or not Path(args.path).is_file():
+            raise FileNotFoundError("path file doesnt exist")
+        cap = cv2.VideoCapture(args.path)
+        # prepare video writer for output
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        out = cv2.VideoWriter('output.mp4', fourcc, fps, (width, height))
 
-    left_state, right_state = "open", "open"
+    mp_face_mesh = mp.solutions.face_mesh
+    face_mesh = mp_face_mesh.FaceMesh(
+        static_image_mode=False,
+        max_num_faces=args.max_faces,
+        refine_landmarks=True,
+    )
+    LEFT_EYE_IDXS = [33, 133]
+    RIGHT_EYE_IDXS = [362, 263]
 
-    if result.multi_face_landmarks:
-        for face_landmarks in result.multi_face_landmarks:
+    faces: dict[int, FaceData] = {}
 
-            for side, (p1_idx, p2_idx) in zip(["left", "right"], [LEFT_EYE_IDXS, RIGHT_EYE_IDXS]):
-                p1 = face_landmarks.landmark[p1_idx]
-                p2 = face_landmarks.landmark[p2_idx]
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
 
-                x1, y1 = int(p1.x * w), int(p1.y * h)
-                x2, y2 = int(p2.x * w), int(p2.y * h)
+        h, w = frame.shape[:2]
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        results = face_mesh.process(rgb)
 
-                margin = 15
-                x_min = max(0, min(x1, x2) - margin)
-                x_max = min(w, max(x1, x2) + margin)
-                y_min = max(0, min(y1, y2) - margin)
-                y_max = min(h, max(y1, y2) + margin)
+        if results.multi_face_landmarks:
+            for idx, landmarks in enumerate(results.multi_face_landmarks):
+                data = faces.setdefault(idx, FaceData())
 
-                eye_img = frame[y_min:y_max, x_min:x_max]
-                if eye_img.size == 0:
-                    continue
+                # eye left + right detection
+                states = {}
+                for side, (p1_idx, p2_idx) in zip(
+                    ("left", "right"), (LEFT_EYE_IDXS, RIGHT_EYE_IDXS)
+                ):
+                    p1, p2 = landmarks.landmark[p1_idx], landmarks.landmark[p2_idx]
+                    x1, y1 = int(p1.x * w), int(p1.y * h)
+                    x2, y2 = int(p2.x * w), int(p2.y * h)
 
-                state = predict_eye(eye_img)
-                if side == "left":
-                    left_state = state
-                else:
-                    right_state = state
+                    margin = 15
+                    x_min = max(0, min(x1, x2) - margin)
+                    x_max = min(w, max(x1, x2) + margin)
+                    y_min = max(0, min(y1, y2) - margin)
+                    y_max = min(h, max(y1, y2) + margin)
 
-                color = (0, 255, 0) if state == "open" else (0, 0, 255)
-                label = f"{side.capitalize()} eye: {state}"
-                cv2.rectangle(frame, (x_min, y_min), (x_max, y_max), color, 2)
-                cv2.putText(frame, label, (x_min, y_min - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+                    eye_img = frame[y_min:y_max, x_min:x_max]
+                    state = predict_eye(eye_img)
+                    states[side] = state
 
-        # detect blink only if eyes went from open -> closed -> open
-        if left_state == "closed" and right_state == "closed":
-            if not both_were_closed:
-                closed_start_time = time.perf_counter()  # start count
-                both_were_closed = True
-        elif left_state == "open" and right_state == "open": 
-            if both_were_closed and closed_start_time is not None: # if eyes opened after blink, stop time and count blink
-                closed_duration = time.perf_counter() - closed_start_time
-                total_closed_time += closed_duration
-                blink_counter += 1
-                both_were_closed = False
-                closed_start_time = None
+                    color = (0, 255, 0) if state == "open" else (0, 0, 255)
+                    cv2.rectangle(frame, (x_min, y_min), (x_max, y_max), color, 2)
+                    cv2.putText(
+                        frame,
+                        f"{side.capitalize()}:{state}",
+                        (x_min, y_min - 5),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.45,
+                        color,
+                        1,
+                        cv2.LINE_AA,
+                    )
 
-    cv2.putText(frame, f"Blinks: {blink_counter}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255,69,0), 2)
-    cv2.putText(frame, f"Eyes closed time: {total_closed_time:.3f} s", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6,	(255,69,0), 2)
-    cv2.putText(frame, f"Average time for each blink: {total_closed_time / blink_counter if blink_counter is not 0 else 0:.3f} s", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,69,0), 2)
+                # blink logic
+                now_closed = states["left"] == states["right"] == "closed"
+                now_open = states["left"] == states["right"] == "open"
 
-    cv2.imshow("Eye Blink Detection", frame)
-    if cv2.waitKey(1) & 0xFF == 27:
-        break
+                if now_closed and not data.both_closed:
+                    data.both_closed = True
+                    data.closed_start = time.perf_counter()
+                elif now_open and data.both_closed:
+                    if data.closed_start is not None:
+                        dur = time.perf_counter() - data.closed_start
+                        data.total_closed_time += dur
+                    data.blink_counter += 1
+                    data.both_closed = False
+                    data.closed_start = None
 
-cap.release()
-cv2.destroyAllWindows()
+                # draw face bounding box and blink count
+                xs = [int(l.x * w) for l in landmarks.landmark]
+                ys = [int(l.y * h) for l in landmarks.landmark]
+                x_min_f, x_max_f = max(0, min(xs)), min(w, max(xs))
+                y_min_f, y_max_f = max(0, min(ys)), min(h, max(ys))
+                cv2.rectangle(frame, (x_min_f, y_min_f), (x_max_f, y_max_f), (255, 255, 0), 1)
+
+                info = f"Face {idx}: blinks {data.blink_counter}"
+                cv2.putText(
+                    frame,
+                    info,
+                    (x_min_f, y_min_f - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.55,
+                    (255, 69, 0),
+                    2,
+                    cv2.LINE_AA,
+                )
+
+        # show and write frame
+        cv2.imshow("Eye‑Blink Detection", frame)
+        if out is not None:
+            out.write(frame)
+
+        if cv2.waitKey(1) & 0xFF in (27, ord("q")):  # ESC / q
+            break
+
+    cap.release()
+    if out is not None:
+        out.release()
+        print("Saved video as output.mp4")
+    cv2.destroyAllWindows()
+
+
+if __name__ == "__main__":
+    main()

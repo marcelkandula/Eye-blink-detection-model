@@ -1,3 +1,8 @@
+''' 
+    This is a lightweight CNN designed for binary eye state classification based on small input grayscale images (24x24 px) 
+    of individual eyes. The architecture consists of two convolutional layers with BatchNorm and MaxPooling, followed by 
+    two fully connected layers. Dropout is used to reduce overfitting. 
+'''
 import torch.nn as nn
 import torch.nn.functional as F
 
