@@ -30,20 +30,20 @@ Click the link below to view the demo video:
 git clone https://github.com/marcelkandula/Eye-blink-detection-model.git
 cd Eye-blink-detection-model
 pip install -r requirements.txt
-python inference.py
+python src/inference.py
 ```
 
 2. Run inference:
 
 ```bash
-python inference.py --source video --path path_to_video.mp4
+python src/inference.py --source video --path path_to_video.mp4
 ```
 
 or when you want to use your default camera
 
 
 ```bash
-python inference.py
+python src/inference.py
 ```
 
 Citation
