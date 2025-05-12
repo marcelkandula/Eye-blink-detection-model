@@ -18,7 +18,7 @@ def parse_args() -> argparse.Namespace:
         "--source",
         choices=["camera", "video"],
         default="camera",
-        help="Źródło obrazu (domyślnie kamera 0)",
+        help="Video source",
     )
     p.add_argument(
         "--path",
