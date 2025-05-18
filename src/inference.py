@@ -40,7 +40,7 @@ def parse_args() -> argparse.Namespace:
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 model = EyeBlinkCNN().to(device)
-model.load_state_dict(torch.load("eye_blink_detection.pth", map_location=device))
+model.load_state_dict(torch.load("weights/eye_blink_detection.pth", map_location=device))
 model.eval()
 
 transform = transforms.Compose(
@@ -57,7 +57,7 @@ transform = transforms.Compose(
 @torch.no_grad()
 def predict_eye(eye_img) -> str:
     if eye_img.size == 0:
-        return "open"  
+        return "closed"  
     tensor = transform(eye_img).unsqueeze(0).to(device)
     out = model(tensor)
     _, pred = torch.max(out, 1)
