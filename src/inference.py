@@ -124,18 +124,16 @@ def main() -> None:
 
                 # eye left + right detection
                 states = {}
-                for side, (p1_idx, p2_idx) in zip(
-                    ("left", "right"), (LEFT_EYE_IDXS, RIGHT_EYE_IDXS)
-                ):
-                    p1, p2 = landmarks.landmark[p1_idx], landmarks.landmark[p2_idx]
-                    x1, y1 = int(p1.x * w), int(p1.y * h)
-                    x2, y2 = int(p2.x * w), int(p2.y * h)
+                for side, (inner_idx, outside_idx) in zip(("left", "right"), (LEFT_EYE_IDXS, RIGHT_EYE_IDXS)):
+                    inner_landmark, outside_landmark = landmarks.landmark[inner_idx], landmarks.landmark[outside_idx]
+                    inner_pixel_X, inner_pixel_Y = int(inner_landmark.x * w), int(inner_landmark.y * h)
+                    outside_pixel_X, outside_pixel_Y = int(outside_landmark.x * w), int(outside_landmark.y * h)
 
                     margin = 15
-                    x_min = max(0, min(x1, x2) - margin)
-                    x_max = min(w, max(x1, x2) + margin)
-                    y_min = max(0, min(y1, y2) - margin)
-                    y_max = min(h, max(y1, y2) + margin)
+                    x_min = max(0, min(inner_pixel_X, outside_pixel_X) - margin)
+                    x_max = min(w, max(inner_pixel_X, outside_pixel_X) + margin)
+                    y_min = max(0, min(inner_pixel_Y, outside_pixel_Y) - margin)
+                    y_max = min(h, max(inner_pixel_Y, outside_pixel_Y) + margin)
 
                     eye_img = frame[y_min:y_max, x_min:x_max]
                     state = predict_eye(eye_img)
@@ -143,16 +141,7 @@ def main() -> None:
 
                     color = (0, 255, 0) if state == "open" else (0, 0, 255)
                     cv2.rectangle(frame, (x_min, y_min), (x_max, y_max), color, 2)
-                    cv2.putText(
-                        frame,
-                        f"{side.capitalize()}:{state}",
-                        (x_min, y_min - 5),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.45,
-                        color,
-                        1,
-                        cv2.LINE_AA,
-                    )
+                    cv2.putText(frame, f"{side.capitalize()}:{state}", (x_min, y_min - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.45, color,1, cv2.LINE_AA,)
 
                 # blink logic
                 now_closed = states["left"] == states["right"] == "closed"
