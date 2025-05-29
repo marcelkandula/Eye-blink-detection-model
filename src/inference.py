@@ -71,11 +71,7 @@ class FaceData:
     total_closed_time: float = 0.0
     both_closed: bool = False
     closed_start: float | None = None
-
-    box_color: tuple[int, int, int] = field(
-        default_factory=lambda: (0, 255, 0)
-    )  
-
+    box_color: tuple[int, int, int] = (0, 255, 0)
 
 # main loop
 
