@@ -162,16 +162,7 @@ def main() -> None:
                 cv2.rectangle(frame, (x_min_f, y_min_f), (x_max_f, y_max_f), (255, 255, 0), 1)
 
                 info = f"Face {idx}: blinks {data.blink_counter}"
-                cv2.putText(
-                    frame,
-                    info,
-                    (x_min_f, y_min_f - 10),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.55,
-                    (255, 69, 0),
-                    2,
-                    cv2.LINE_AA,
-                )
+                cv2.putText(frame, info, (x_min_f, y_min_f - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 69, 0), 2, cv2.LINE_AA,)
 
         # show and write frame
         cv2.imshow("Eye‑Blink Detection", frame)
