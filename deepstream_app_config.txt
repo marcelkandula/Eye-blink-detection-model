@@ -1,0 +1,37 @@
+[application]
+enable-perf-measurement=1
+perf-measurement-interval-sec=5
+
+[source0]
+type=3
+uri=file:///workspace/frames/   ; katalog z obrazami
+num-sources=1
+gpu-id=0
+cudadec-memtype=0
+
+[streammux]
+gpu-id=0
+batch-size=1
+live-source=0
+batched-push-timeout=4000000
+width=24
+height=24
+nvbuf-memory-type=0
+
+[primary-gie]
+enable=1
+gpu-id=0
+gie-unique-id=1
+config-file=/workspace/deepstream_infer_primary.txt
+batch-size=1
+interval=0
+
+[sink0]
+enable=1
+type=3             ; File sink
+sync=0
+container=1        ; 1=mp4
+codec=1            ; 1=h264
+bitrate=2000000
+output-file=/workspace/output.mp4
+source-id=0

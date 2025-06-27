@@ -1,0 +1,17 @@
+[property]
+gpu-id=0
+net-scale-factor=1.0
+model-color-format=0        ; 0=RGB, 1=BGR
+model-engine-file=/workspace/eye_blink.engine
+labelfile-path=/workspace/labels.txt
+batch-size=1
+network-mode=0              ; 0=FP32, 1=INT8, 2=FP16
+num-detected-classes=2
+interval=0
+gie-unique-id=1
+
+[class-attrs-all]
+pre-cluster-threshold=0.2
+apply-nms=1
+nms-iou-threshold=0.4
+eps=1e-5
